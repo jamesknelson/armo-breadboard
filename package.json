@@ -1,0 +1,43 @@
+{
+  "name": "armo-breadboard",
+  "version": "0.2.0",
+  "description": "Edit a live React component's source in real time.",
+  "author": "James K Nelson <james@jamesknelson.com>",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "scripts": {
+    "clean": "rimraf lib",
+    "build:watch": "cross-env BABEL_ENV=commonjs babel --watch --source-maps=inline -d lib/ source/",
+    "build": "cross-env BABEL_ENV=commonjs babel source --out-dir lib",
+    "prepublish": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "playground",
+    "react",
+    "component",
+    "breadboard",
+    "armo",
+    "live"
+  ],
+  "peerDependencies": {
+    "react": "^15.4.2",
+    "react-dom": "^15.4.2"
+  },
+  "devDependencies": {
+    "babel-core": "^6.24.0",
+    "babel-plugin-transform-class-properties": "^6.24.0",
+    "babel-plugin-transform-es2015-modules-commonjs": "^6.24.0",
+    "babel-plugin-transform-object-rest-spread": "^6.24.0",
+    "babel-preset-latest": "^6.24.0",
+    "cross-env": "^3.1.4"
+  },
+  "dependencies": {
+    "babel-core": "^6.24.0",
+    "babel-preset-react": "^6.24.0",
+    "babel-preset-latest": "^6.24.0",
+    "exenv": "^1.2.1",
+    "hatt": "^0.2.1",
+    "mdxc": "^1.0.0-beta.4",
+    "resize-observer-polyfill": "^1.4.2"
+  }
+}
