@@ -102,6 +102,7 @@ export default class RawBreadboard extends Component {
         {...other}
         modesController={this.modesController}
         prepare={rawPrepare}
+        renderToString={null}
         renderEditorElement={this.props.theme.renderEditor}
         theme={this.renderTheme}
         transform={this.transform}
