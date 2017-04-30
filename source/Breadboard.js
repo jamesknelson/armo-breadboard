@@ -5,7 +5,7 @@ import ResizeObserver from 'resize-observer-polyfill'
 import ReactDOM from 'react-dom'
 import ReactDOMServer from 'react-dom/server'
 import ConsoleController from './ConsoleController'
-import { verifyThemePropTypes, verifyMissingProps } from './util'
+import { verifyThemePropTypes, verifyMissingProps, debounce } from './util'
 
 
 function defaultBreadboardRequire(name) {
@@ -177,6 +177,8 @@ export default class Breadboard extends Component {
     this.consoleController.thaw()
     this.fakeConsole = this.consoleController.get().actions
 
+    this.debouncedChangeSource = debounce(this.changeSource, 100)
+
     this.dimensions = { width, height }
 
     this.viewController = props.viewController
@@ -189,6 +191,7 @@ export default class Breadboard extends Component {
     this.state = {
       consoleMessages: [],
       source: source,
+      editorSource: source,
       value: null,
       modes: modes,
       transformedSource: null,
@@ -312,14 +315,22 @@ export default class Breadboard extends Component {
     this.setState(updates)
   }
 
-  handleChangeSource = (e) => {
-    const source = typeof e === 'string' ? e : (e && e.target && e.target.value)
+  // Used so to create debouncedChangeSource. This is separate to the event handler
+  // as React doesn't like us keeping the event objects around for the completion of
+  // the timeout.
+  changeSource = (source) => {
     if (source !== this.state.source) {
       this.setState({
         source,
         ...this.transformAndPrepare(source, this.props)
       })
     }
+  }
+
+  handleChangeSource = (e) => {
+    const source = typeof e === 'string' ? e : (e && e.target && e.target.value)
+    this.setState({ editorSource: source })
+    this.debouncedChangeSource(source)
   }
 
   handleConsoleChange = ({ messages }) => {
@@ -338,7 +349,7 @@ export default class Breadboard extends Component {
     if (process.env.NODE_ENV !== 'production') {
       // Editor components are complicated beings, and probably will feel the
       // same way about being "styled" as a dog feels about taking a bath.
-      // 
+      //
       // If you want to theme your editor, you'll need to do so by passing in
       // an already themed editor. The only condition is that it accepts
       // layout styles via `style`, a `value` with the current source, and an
@@ -350,7 +361,7 @@ export default class Breadboard extends Component {
 
     return this.props.renderEditorElement({
       layout: themeableProps.layout,
-      value: this.state.source,
+      value: this.state.editorSource,
       onChange: this.handleChangeSource,
     })
   }

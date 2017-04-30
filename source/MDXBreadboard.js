@@ -149,6 +149,7 @@ export default class MDXBreadboard extends Component {
       renderBreadboard = (themeProps) =>
         <MDXBreadboard
           {...themeProps}
+          require={this.props.require}
           defaultSource={children}
           defaultUnwrapped={!!options.unwrapped}
           defaultMode={options.mode || 'source'}
@@ -161,6 +162,9 @@ export default class MDXBreadboard extends Component {
 
   renderTheme = (props) => {
     return this.props.theme.renderBreadboard(Object.assign({}, props, {
+      defaultMode: this.props.defaultMode,
+      defaultSecondary: this.props.defaultSecondary,
+
       unwrapped: this.state.unwrapped,
       onToggleWrapped: this.toggleWrapped,
     }))
@@ -195,7 +199,6 @@ export default class MDXBreadboard extends Component {
     const data = frontMatter(source)
     const es6 = wrappedMDXC.render(data.body)
     const pretty = unwrapped ? unwrappedMDXC.render(data.body) : es6
-
     let runnableCode
     let error = null
     try {
@@ -208,7 +211,7 @@ export default class MDXBreadboard extends Component {
     return {
       transformedSource: pretty,
       executableSource: runnableCode,
-      error: null, 
+      error,
     }
   }
 }
