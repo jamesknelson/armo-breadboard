@@ -14,13 +14,13 @@ function defaultBreadboardRequire(name) {
   }
 }
 
-function defaultRenderToString(source, require, console, props) {
+function defaultRenderToString(source, require, window, props) {
   try {
     var execute
     var exports = {}
     var module = { exports: exports }
-    eval('execute = function execute(module, exports, require, console) { '+source+' }')
-    execute(module, exports, require, console)
+    eval('execute = function execute(module, exports, require, window, console) { '+source+' }')
+    execute(module, exports, require, window, window.console)
     const component = exports.default
     return ReactDOMServer.renderToString(React.createElement(component, props))
   }
@@ -29,13 +29,37 @@ function defaultRenderToString(source, require, console, props) {
   }
 }
 
-function defaultPrepare(source, require, console) {
+function defaultPrepare(source, require, window) {
   try {
-    var execute
-    var exports = {}
-    var module = { exports: exports }
-    eval('execute = function execute(module, exports, require, console) { '+source+' }')
-    execute(module, exports, require, console)
+    const exports = {}
+    const module = { exports: exports }
+
+    const execute = new Function(
+      'window',
+      'setTimeout',
+      'setInterval',
+      'requestAnimationFrame',
+      'fetch',
+      'History',
+      'console',
+      'module',
+      'exports',
+      'require',
+      source
+    )
+    execute(
+      window,
+      window.setTimeout,
+      window.setInterval,
+      window.requestAnimationFrame,
+      window.fetch,
+      window.History,
+      window.console,
+      module,
+      exports,
+      require,
+    )
+
     const component = exports.default
 
     return (mount, props={}) => {
@@ -87,6 +111,83 @@ class BreadboardResizeObserver {
 }
 
 const breadboardResizeObserver = new BreadboardResizeObserver
+
+
+class FakeWindow {
+  constructor(console) {
+    this.seq = 1
+
+    this.timeouts = []
+    this.intervals = []
+    this.frames = []
+
+    this.actions = {
+      console: console,
+
+      setTimeout: (cb, ms) => {
+        const id = window.setTimeout(cb, ms)
+        this.timeouts.push(id)
+        return id
+      },
+
+      setInterval: (cb, ms) => {
+        const id = window.setInterval(cb, ms)
+        this.intervals.push(id)
+        return id
+      },
+
+      requestAnimationFrame: (cb) => {
+        const id = window.requestAnimationFrame(cb)
+        this.frames.push(id)
+        return id
+      },
+
+      fetch: (...args) => {
+        const seq = this.seq
+        return new Promise((resolve, reject) =>
+          window.fetch(...args).then(
+            (...success) => {
+              if (seq === this.seq) {
+                resolve(...success)
+              }
+            },
+            (...failure) => {
+              if (seq === this.seq) {
+                reject(...failure)
+              }
+            }
+          )
+        )
+      },
+
+      History: {},
+    }
+  }
+
+  reset() {
+    for (let timeout of this.timeouts) {
+      window.clearTimeout(timeout)
+    }
+    for (let interval of this.intervals) {
+      window.clearInterval(interval)
+    }
+    for (let frame of this.frames) {
+      window.cancelAnimationFrame(frame)
+    }
+
+    this.timeouts.length = 0
+    this.intervals.length = 0
+    this.frames.length = 0
+
+    this.actions.console.clear()
+    this.seq++
+  }
+
+  destroy() {
+    this.reset()
+    this.actions.console = null
+  }
+}
 
 
 export default class Breadboard extends Component {
@@ -175,7 +276,7 @@ export default class Breadboard extends Component {
 
     this.consoleController = createController(ConsoleController)
     this.consoleController.thaw()
-    this.fakeConsole = this.consoleController.get().actions
+    this.fakeWindow = new FakeWindow(this.consoleController.get().actions)
 
     this.debouncedChangeSource = debounce(this.changeSource, 100)
 
@@ -220,16 +321,16 @@ export default class Breadboard extends Component {
           this.state.string = props.renderToString(
             executableSource,
             props.require,
-            this.fakeConsole,
+            this.fakeWindow.actions,
             props.viewController && props.viewController.get()
           )
         }
         if (ExecutionEnvironment.canUseDOM) {
-          this.fakeConsole.clear()
+          this.fakeWindow.reset()
           this.state.renderer = props.prepare(
             executableSource,
             props.require,
-            this.fakeConsole,
+            this.fakeWindow.actions,
           )
         }
       }
@@ -288,6 +389,7 @@ export default class Breadboard extends Component {
 
     this.modesController.unsubscribe(this.handleModesChange)
     this.consoleController.destroy()
+    this.fakeWindow.destroy()
 
     try {
       ReactDOM.unmountComponentAtNode(this.refs.mount)
@@ -417,7 +519,7 @@ export default class Breadboard extends Component {
 
     if (execute || modes.transformed) {
       const { transformedSource, executableSource, error } = props.transform(source)
-      this.fakeConsole.clear()
+      this.fakeWindow.reset()
 
       if (transformedSource !== state.transformedSource ||
           executableSource !== state.executableSource ||
@@ -434,7 +536,7 @@ export default class Breadboard extends Component {
           result.renderer = props.prepare(
             executableSource,
             props.require,
-            this.fakeConsole,
+            this.fakeWindow.actions,
           )
         }
 
@@ -475,7 +577,7 @@ export default class Breadboard extends Component {
       this.handleResize(newDimensions, props)
     }
   }
-  
+
   destroyResizeObserver() {
     breadboardResizeObserver.unobserve(this.rootElement, this.handleResize)
   }

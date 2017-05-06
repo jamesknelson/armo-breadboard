@@ -7,19 +7,47 @@ import latestPreset from 'babel-preset-latest'
 import reactPreset from 'babel-preset-react'
 
 
-function rawPrepare(source, require, console) {
+function rawPrepare(source, require, window) {
   try {
-    var execute
-    var exports = {}
-    var module = { exports: exports }
-    eval('execute = function execute(module, exports, require, console, breadboard, React, ReactDOM, __MOUNT__) { '+source+' }')
+    const exports = {}
+    const module = { exports: exports }
 
-    // TODO: maybe unmount any previous React component on the mountpoint first
-    // add React to injected stuff
+    const execute = new Function(
+      'window',
+      'setTimeout',
+      'setInterval',
+      'requestAnimationFrame',
+      'fetch',
+      'History',
+      'console',
+      'module',
+      'exports',
+      'require',
+      'breadboard',
+      'React',
+      'ReactDOM',
+      '__MOUNT__',
+      source
+    )
 
     return (mount, props={}) => {
       try {
-        execute(module, exports, require, console, props, React, ReactDOM, mount)
+        execute(
+          window,
+          window.setTimeout,
+          window.setInterval,
+          window.requestAnimationFrame,
+          window.fetch,
+          window.History,
+          window.console,
+          module,
+          exports,
+          require,
+          props,
+          React,
+          ReactDOM,
+          mount
+        )
       }
       catch (err) {
         return err
@@ -127,7 +155,7 @@ export default class RawBreadboard extends Component {
     return {
       transformedSource: transformed,
       executableSource: transformed,
-      error: error, 
+      error: error,
     }
   }
 }
