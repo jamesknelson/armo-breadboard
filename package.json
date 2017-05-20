@@ -33,11 +33,13 @@
   },
   "dependencies": {
     "babel-core": "^6.24.0",
-    "babel-preset-react": "^6.24.0",
     "babel-preset-latest": "^6.24.0",
+    "babel-preset-react": "^6.24.0",
     "exenv": "^1.2.1",
     "hatt": "^0.2.1",
+    "hoist-non-react-statics": "^1.2.0",
     "mdxc": "^1.0.0-beta.4",
+    "prop-types": "^15.5.10",
     "resize-observer-polyfill": "^1.4.2"
   }
 }

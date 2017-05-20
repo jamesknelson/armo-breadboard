@@ -1,10 +1,10 @@
 import ExecutionEnvironment from 'exenv'
 import { createController } from 'hatt'
 import React, { Component, PropTypes } from 'react'
-import ResizeObserver from 'resize-observer-polyfill'
 import ReactDOM from 'react-dom'
 import ReactDOMServer from 'react-dom/server'
 import ConsoleController from './ConsoleController'
+import { injectDimensions } from './Injectors'
 import { verifyThemePropTypes, verifyMissingProps, debounce } from './util'
 
 
@@ -80,37 +80,6 @@ function defaultPrepare(source, require, window) {
     return () => err
   }
 }
-
-
-class BreadboardResizeObserver {
-  constructor() {
-    this.callbacks = new WeakMap
-    this.observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const callback = this.callbacks.get(entry.target)
-
-        if (callback) {
-          callback({
-            height: entry.contentRect.height,
-            width: entry.contentRect.width,
-          })
-        }
-      }
-    })
-  }
-
-  observe(target, callback) {
-    this.observer.observe(target)
-    this.callbacks.set(target, callback)
-  }
-
-  unobserve(target, callback) {
-    this.observer.unobserve(target)
-    this.callbacks.delete(target, callback)
-  }
-}
-
-const breadboardResizeObserver = new BreadboardResizeObserver
 
 
 class FakeWindow {
@@ -190,7 +159,7 @@ class FakeWindow {
 }
 
 
-export default class Breadboard extends Component {
+export default injectDimensions.withConfiguration({ height: null })(class Breadboard extends Component {
   static propTypes = {
     /**
      * A string containing the original source. Updates to the source will
@@ -198,11 +167,6 @@ export default class Breadboard extends Component {
      * reflected once the source has undergone any change.
      */
     defaultSource: PropTypes.string.isRequired,
-
-    /**
-     * Allows for fixing the breadboard's height.
-     */
-    height: PropTypes.number,
 
     /**
      * A Controller object that keeps track of the current visible modes.
@@ -255,11 +219,6 @@ export default class Breadboard extends Component {
      * by default.
      */
     transform: PropTypes.func,
-
-    /**
-     * Allows for fixing the breadboard's width.
-     */
-    width: PropTypes.number,
   }
 
   static defaultProps = {
@@ -272,7 +231,6 @@ export default class Breadboard extends Component {
     super(props)
 
     const source = props.defaultSource.replace(/^\n|\n$/g, '')
-    const { width, height } = props
 
     this.consoleController = createController(ConsoleController)
     this.consoleController.thaw()
@@ -280,12 +238,10 @@ export default class Breadboard extends Component {
 
     this.debouncedChangeSource = debounce(this.changeSource, 100)
 
-    this.dimensions = { width, height }
-
     this.viewController = props.viewController
 
     this.modesController = props.modesController
-    this.modesController.setDimensions(this.dimensions)
+    this.modesController.setDimensions({ width: props.width, height: props.height })
 
     const modes = this.modesController.modes
 
@@ -343,8 +299,6 @@ export default class Breadboard extends Component {
     this.modesController.subscribe(this.handleModesChange)
     this.consoleController.subscribe(this.handleConsoleChange)
 
-    this.manageDimensions(this.props)
-
     // Use this instead of the `modes` on state, as if the above
     // manageDimensions call has caused a change, it may not have
     // propagated through to `this.state` yet.
@@ -361,7 +315,12 @@ export default class Breadboard extends Component {
       console.warn('Breadboard does not currently support changes to the `viewController` prop!')
     }
 
-    this.manageDimensions(nextProps)
+    if (nextProps.width !== this.props.width || nextProps.height !== this.props.height) {
+      this.modesController.setDimensions({
+        width: nextProps.width,
+        height: nextProps.height,
+      })
+    }
 
     if (nextProps.transform !== this.props.transform ||
         nextProps.prepare !== this.props.prepare ||
@@ -383,10 +342,6 @@ export default class Breadboard extends Component {
     }
   }
   componentWillUnmount() {
-    if (this.resizeObserver) {
-      this.destroyResizeObserver()
-    }
-
     this.modesController.unsubscribe(this.handleModesChange)
     this.consoleController.destroy()
     this.fakeWindow.destroy()
@@ -394,16 +349,6 @@ export default class Breadboard extends Component {
     try {
       ReactDOM.unmountComponentAtNode(this.refs.mount)
     } catch (e) { }
-  }
-
-  handleResize = (dimensions, props={}) => {
-    const forcedDimensions = {
-      height: props.height === undefined ? dimensions.height : props.height,
-      width: props.width === undefined ? dimensions.width : props.width,
-    }
-
-    this.dimensions = forcedDimensions
-    this.modesController.setDimensions(forcedDimensions)
   }
 
   handleModesChange = (modes) => {
@@ -553,32 +498,4 @@ export default class Breadboard extends Component {
       }
     }
   }
-
-  manageDimensions(props) {
-    const oldDimensions = this.dimensions
-    let newDimensions
-
-    if (props.width !== undefined && props.height !== undefined) {
-      if (this.resizeObserver) {
-        this.destroyResizeObserver()
-      }
-    }
-    else {
-      breadboardResizeObserver.observe(this.rootElement, this.handleResize)
-
-      const rect = this.rootElement.getBoundingClientRect()
-      newDimensions = {
-        height: rect.height,
-        width: rect.width,
-      }
-    }
-
-    if (newDimensions && (newDimensions.width !== oldDimensions.width || newDimensions.height !== oldDimensions.height)) {
-      this.handleResize(newDimensions, props)
-    }
-  }
-
-  destroyResizeObserver() {
-    breadboardResizeObserver.unobserve(this.rootElement, this.handleResize)
-  }
-}
+})

@@ -1,10 +1,33 @@
+import SimpleController from './SimpleController'
+
+
 function modesAreEqual(oldModes, newModes) {
   return Object.keys(oldModes).sort().join(',') === Object.keys(newModes).sort().join(',')
 }
 
 
-export default class ResponsiveDualModeController {
+export default class ResponsiveDualModeController extends SimpleController {
+  static actions = {
+    selectMode(mode) {
+      this.setMode(mode)
+    },
+    selectTransformed() {
+      this.setMode('transformed')
+    },
+    selectView() {
+      this.setMode('view')
+    },
+    selectConsole() {
+      this.setMode('console')
+    },
+    selectSource() {
+      this.setMode('source')
+    },
+  }
+
   constructor(env) {
+    super(env)
+
     const {
       /**
        * Selects the secondary pane to display in the case that the user is
@@ -25,43 +48,20 @@ export default class ResponsiveDualModeController {
       maxSinglePaneWidth=999,
     } = env
 
-    this.defaultSecondary = defaultSecondary
-    this.defaultMode = defaultMode
-    this.maxSinglePaneWidth = maxSinglePaneWidth
-    this.modes = {}
-    this.primary = defaultMode
-    this.listeners = []
+    this.setState({
+      defaultSecondary,
+      defaultMode,
+      maxSinglePaneWidth,
+      modes: {},
+      primary: defaultMode,
+    })
   }
 
-  subscribe(callback) {
-    this.listeners.push(callback)
-  }
-  unsubscribe(callback) {
-    this.listeners.splice(this.listeners.indexOf(callback), 1)
-  }
-
-  environmentDidChange(newEnv) {
-    if (newEnv.maxSinglePaneWidth !== this.maxSinglePaneWidth) {
+  envWillUpdate(newEnv) {
+    if (newEnv.maxSinglePaneWidth !== this.env.maxSinglePaneWidth) {
       this.maxSinglePaneWidth = newEnv.maxSinglePaneWidth
       this._recalc()
     }
-  }
-
-  actions = {
-    selectMode: this.setMode.bind(this),
-
-    selectTransformed: () => {
-      this.setMode('transformed')
-    },
-    selectView: () => {
-      this.setMode('view')
-    },
-    selectConsole: () => {
-      this.setMode('console')
-    },
-    selectSource: () => {
-      this.setMode('source')
-    },
   }
 
   setMode(newMode) {
