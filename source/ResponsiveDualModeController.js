@@ -1,97 +1,66 @@
-import SimpleController from './SimpleController'
+import PureController from './PureController'
 
 
-function modesAreEqual(oldModes, newModes) {
-  return Object.keys(oldModes).sort().join(',') === Object.keys(newModes).sort().join(',')
-}
+export default class ResponsiveDualModeController extends PureController {
+  static defaultProps = {
+    /**
+     * Selects the secondary pane to display in the case that the user is
+     * viewing the source pane on a small screen, and then the screen
+     * expands to allow a second pane.
+     */
+    defaultSecondary: 'view',
 
+    /**
+     * The default mode to display upon load when the screen only contains
+     * space for a single pane.
+     */
+    defaultMode: 'source',
 
-export default class ResponsiveDualModeController extends SimpleController {
+    /**
+     * The maximum width for which only a single pane will be used.
+     */
+    maxSinglePaneWidth: 999,
+  }
+
   static actions = {
     selectMode(mode) {
-      this.setMode(mode)
+      this.setState({ primary: mode })
     },
     selectTransformed() {
-      this.setMode('transformed')
+      this.setState({ primary: 'transformed' })
     },
     selectView() {
-      this.setMode('view')
+      this.setState({ primary: 'view' })
     },
     selectConsole() {
-      this.setMode('console')
+      this.setState({ primary: 'console' })
     },
     selectSource() {
-      this.setMode('source')
+      this.setState({ primary: 'source' })
     },
   }
 
-  constructor(env) {
-    super(env)
+  constructor(props) {
+    super(props)
 
-    const {
-      /**
-       * Selects the secondary pane to display in the case that the user is
-       * viewing the source pane on a small screen, and then the screen
-       * expands to allow a second pane.
-       */
-      defaultSecondary='view',
-
-      /**
-       * The default mode to display upon load when the screen only contains
-       * space for a single pane.
-       */
-      defaultMode='source',
-
-      /**
-       * The maximum width for which only a single pane will be used.
-       */
-      maxSinglePaneWidth=999,
-    } = env
-
-    this.setState({
-      defaultSecondary,
-      defaultMode,
-      maxSinglePaneWidth,
-      modes: {},
-      primary: defaultMode,
-    })
-  }
-
-  envWillUpdate(newEnv) {
-    if (newEnv.maxSinglePaneWidth !== this.env.maxSinglePaneWidth) {
-      this.maxSinglePaneWidth = newEnv.maxSinglePaneWidth
-      this._recalc()
+    this.state = {
+      primary: props.defaultMode,
     }
   }
 
-  setMode(newMode) {
-    this.primary = newMode
-    this._recalc()
-  }
+  output() {
+    const props = this.props
+    const primary = this.state.primary
+    const modes = {}
 
-  setDimensions({ width }) {
-    this.width = width
-    this._recalc()
-  }
-
-  _recalc() {
-    const oldModes = this.modes
-    const newModes = {}
-
-    if (this.width !== undefined && this.width <= this.maxSinglePaneWidth) {
-      newModes[this.primary] = true
+    if (props.width !== undefined && props.width <= props.maxSinglePaneWidth) {
+      modes[primary] = true
     }
     else {
-      newModes['source'] = true
-      newModes[this.primary === 'source' ? this.defaultSecondary : this.primary] = true
+      modes['source'] = true
+      modes[primary === 'source' ? props.defaultSecondary : primary] = true
     }
 
-    if (!modesAreEqual(newModes, oldModes)) {
-      this.modes = newModes
-
-      for (let listener of this.listeners) {
-        listener(this.modes)
-      }
-    }
+    return Object.assign(modes, this.actions)
   }
 }

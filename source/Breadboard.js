@@ -4,7 +4,6 @@ import React, { Component, PropTypes } from 'react'
 import ReactDOM from 'react-dom'
 import ReactDOMServer from 'react-dom/server'
 import ConsoleController from './ConsoleController'
-import { injectDimensions } from './Injectors'
 import { verifyThemePropTypes, verifyMissingProps, debounce } from './util'
 
 
@@ -159,7 +158,7 @@ class FakeWindow {
 }
 
 
-export default injectDimensions.withConfiguration({ height: null })(class Breadboard extends Component {
+export default class Breadboard extends Component {
   static propTypes = {
     /**
      * A string containing the original source. Updates to the source will
@@ -169,10 +168,10 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
     defaultSource: PropTypes.string.isRequired,
 
     /**
-     * A Controller object that keeps track of the current visible modes.
+     * A Controller output that keeps track of the current visible modes.
      * Breadboard will only compile and/or execute code when it is required.
      */
-    modesController: PropTypes.object.isRequired,
+    modes: PropTypes.object.isRequired,
 
     /**
      * A function that takes the transformed source and returns a function
@@ -240,10 +239,7 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
 
     this.viewController = props.viewController
 
-    this.modesController = props.modesController
-    this.modesController.setDimensions({ width: props.width, height: props.height })
-
-    const modes = this.modesController.modes
+    const modes = this.props.modes
 
     this.state = {
       consoleMessages: [],
@@ -296,36 +292,29 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
   }
 
   componentDidMount() {
-    this.modesController.subscribe(this.handleModesChange)
     this.consoleController.subscribe(this.handleConsoleChange)
 
     // Use this instead of the `modes` on state, as if the above
     // manageDimensions call has caused a change, it may not have
     // propagated through to `this.state` yet.
-    if (this.modesController.modes.view) {
+    if (this.props.modes.view) {
       const viewController = this.props.viewController
       this.execute(viewController && viewController.get())
     }
   }
   componentWillReceiveProps(nextProps) {
-    if (nextProps.modesController !== this.modesController) {
-      console.warn('Breadboard does not currently support changes to the `modesController` prop!')
-    }
     if (nextProps.viewController !== this.viewController) {
       console.warn('Breadboard does not currently support changes to the `viewController` prop!')
     }
 
-    if (nextProps.width !== this.props.width || nextProps.height !== this.props.height) {
-      this.modesController.setDimensions({
-        width: nextProps.width,
-        height: nextProps.height,
-      })
+    if (nextProps.modes !== this.props.modes) {
+      this.handleModesChange(nextProps.modes)
     }
 
     if (nextProps.transform !== this.props.transform ||
         nextProps.prepare !== this.props.prepare ||
         nextProps.require !== this.props.require) {
-      this.setState(this.transformAndPrepare(this.state.source, nextProps) || {})
+      this.setState(this.transformAndPrepare(this.state.source, nextProps, nextProps.modes) || {})
     }
   }
   componentDidUpdate(prevProps, prevState) {
@@ -342,7 +331,6 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
     }
   }
   componentWillUnmount() {
-    this.modesController.unsubscribe(this.handleModesChange)
     this.consoleController.destroy()
     this.fakeWindow.destroy()
 
@@ -357,7 +345,7 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
     const nextExecute = modes.view || modes.console
     const updates = { modes }
     if ((!prevModes.transformed && modes.transformed) || (!prevExecute && nextExecute)) {
-      Object.assign(updates, this.transformAndPrepare(this.state.source, this.props))
+      Object.assign(updates, this.transformAndPrepare(this.state.source, this.props, modes))
     }
     this.setState(updates)
   }
@@ -369,7 +357,7 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
     if (source !== this.state.source) {
       this.setState({
         source,
-        ...this.transformAndPrepare(source, this.props)
+        ...this.transformAndPrepare(source, this.props, this.props.modes)
       })
     }
   }
@@ -447,7 +435,7 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
       renderMountElement: this.renderMountElement,
 
       modes: this.state.modes,
-      modeActions: this.modesController.actions,
+      modeActions: this.state.modes,
     })
 
     return React.cloneElement(rootElement, { ref: this.setRootElement })
@@ -457,9 +445,8 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
     this.rootElement = el
   }
 
-  transformAndPrepare(source, props) {
+  transformAndPrepare(source, props, modes) {
     const state = this.state
-    const modes = this.modesController.modes
     const execute = modes.view || modes.console
 
     if (execute || modes.transformed) {
@@ -498,4 +485,4 @@ export default injectDimensions.withConfiguration({ height: null })(class Breadb
       }
     }
   }
-})
+}

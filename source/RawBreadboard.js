@@ -1,7 +1,10 @@
 import React, { Component, PropTypes } from 'react'
 import ReactDOM from 'react-dom'
 import Breadboard from './Breadboard'
+import { injectDimensions } from './Injectors'
 import ResponsiveDualModeController from './ResponsiveDualModeController'
+import { controlledBy } from './Controllers'
+import compose from './compose'
 import { transform } from 'babel-core'
 import latestPreset from 'babel-preset-latest'
 import reactPreset from 'babel-preset-react'
@@ -60,21 +63,13 @@ function rawPrepare(source, require, window) {
 }
 
 
-export default class RawBreadboard extends Component {
+const decorate = compose(
+  injectDimensions.withConfiguration({ height: null }),
+  controlledBy({ modes: ResponsiveDualModeController })
+)
+
+export default decorate(class RawBreadboard extends Component {
   static propTypes = {
-    /**
-     * The default mode to display upon load when the screen only contains
-     * space for a single pane.
-     */
-    defaultMode: PropTypes.oneOf(['source', 'view', 'transformed', 'console']),
-
-    /**
-     * Selects the secondary pane to display in the case that the user is
-     * viewing the source pane on a small screen, and then the screen
-     * expands to allow a second pane.
-     */
-    defaultSecondary: PropTypes.oneOf(['view', 'transformed', 'console']).isRequired,
-
     /**
      * When this id is used in a `document.getElementById` call, the entire
      * call will be replaced with the mountpoint's element. Note that this
@@ -92,27 +87,7 @@ export default class RawBreadboard extends Component {
   }
 
   static defaultProps = {
-    defaultMode: 'source',
-    defaultSecondary: 'view',
     appId: 'app',
-  }
-
-  constructor(props) {
-    super(props)
-
-    this.modesController = new ResponsiveDualModeController({
-      maxSinglePaneWidth: props.theme.maxSinglePaneWidth,
-      defaultSecondary: props.defaultSecondary,
-      defaultMode: props.defaultMode,
-    })
-  }
-
-  componentWillReceiveProps(nextProps) {
-    if (nextProps.theme.maxSinglePaneWidth !== this.props.theme.maxSinglePaneWidth) {
-      this.modesController.environmentDidChange({
-          maxSinglePaneWidth: nextProps.theme.maxSinglePaneWidth,
-      })
-    }
   }
 
   renderTheme = (props) => {
@@ -123,12 +98,9 @@ export default class RawBreadboard extends Component {
   }
 
   render() {
-    const { ...other } = this.props
-
     return (
       <Breadboard
-        {...other}
-        modesController={this.modesController}
+        {...this.props}
         prepare={rawPrepare}
         renderToString={null}
         renderEditorElement={this.props.theme.renderEditor}
@@ -158,4 +130,4 @@ export default class RawBreadboard extends Component {
       error: error,
     }
   }
-}
+})

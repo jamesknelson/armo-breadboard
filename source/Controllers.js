@@ -8,17 +8,29 @@
  *     abstract class Controller<I, O> {
  *       constructor(input: I);
  *
+ *       $intialize(): void;
+ *
  *       $set(input: I): void;
  *       $get(): O;
  *
  *       $subscribe(
  *         onChange: (output: O) => void,
  *         onTransactionStart: () => void,
- *         onTransactionEnd: () => void
+ *         onTransactionEnd: (unlock: () => void) => void
  *       ): Unsubscriber;
  *
  *       $destroy(): void;
  *     }
+ *
+ * The aim is to prevent yourself from shooting your foot by batching changes
+ * to the inner component, and preventing multiple calls to a single action
+ * within the same batch.
+ *
+ * Changes to a controller's outputs in response to flushing the batched
+ * changes through the wrapped component also causes an exception. This
+ * prevents infinite loops caused by feedback from the controller's outputs
+ * into their inputs, while still allowing feedback into the controller's
+ * state.
  */
 
 import React, { Component } from 'react'
@@ -40,6 +52,8 @@ export function instantiateController(type, value) {
   }
 
   const instance = new type(value)
+
+  instance.$initialize()
 
   const controller = {
     set: instance.$set.bind(instance),
@@ -94,7 +108,7 @@ export function instantiateDefaultControllers(controllerClasses) {
     for (let key of keys) {
       if (props[key] === undefined) {
         const ControllerClass = controllerClasses[key]
-        created[key] = new ControllerClass(props)
+        created[key] = instantiateController(ControllerClass, props)
       }
     }
 
@@ -121,7 +135,7 @@ export function instantiateDefaultControllers(controllerClasses) {
 
         const merged = { ...nextProps, ...this.state.defaults }
         this.setState({
-          defaults: Object.assign(merged, createMissingControllers(merged))
+          defaults: Object.assign(this.state.defaults, createMissingControllers(merged))
         })
       }
 
@@ -210,8 +224,24 @@ export function controlledByProps(controllerPropNames) {
 
         this.state = {}
         this.unsubscribers = {}
-        this.flushLevel = 0
+
+        // Keep track of the number of controllers that are currently running
+        // actions, and thus may cause side effects that involve changes
+        // to the environment or changes emitted via onChange
         this.transactionLevel = 0
+
+        // Keep track of the number of transactions that have been started
+        // during flush, so that we can wait for them all to exit before
+        // considering the flush to be complete
+        this.flushLevel = 0
+
+        // Keep controller actions locked until all controllers leave their
+        // transactiosn
+        this.unlockQueue = []
+
+        // Keep track of whether there have been any changes since the last
+        // flush, to make sure that empty transactions don't cause a re-render
+        this.changesExist = false
       }
 
       componentWillMount() {
@@ -251,7 +281,7 @@ export function controlledByProps(controllerPropNames) {
               // I need to confirm this.
               // This can also cause calls to `handleChange`, but this is fine
               // as it will already complain if transaction level is 0.
-              controller.set(nextProps)
+              nextController.set(nextProps)
             }
           }
         }
@@ -275,7 +305,7 @@ export function controlledByProps(controllerPropNames) {
       }
 
       render() {
-        const inject = isSingleton ? this.state.outputs[isSingleton] : this.state.outputs
+        const inject = isSingleton ? this.state[isSingleton] : this.state
 
         return React.createElement(WrappedComponent, {
           ...this.props,
@@ -320,6 +350,8 @@ export function controlledByProps(controllerPropNames) {
           throw new Error('controlledBy: A Controller may not change its output while flushing changes to the component.')
         }
 
+        this.changesExist = true
+
         this.setState({
           [key]: newState,
         })
@@ -332,33 +364,40 @@ export function controlledByProps(controllerPropNames) {
         // that the transaction finishes before any more changes occur, even
         // if the transaction doesn't finish until after the flush completes.
         //
-        // This helps to ensure we don't get async infinite loops.
+        // This helps to ensure we don't get async infinite loops by ensuring
+        // that an error is thrown if handleChange due to an async transaction
+        // that was started during flush.
         if (this.flushLevel > 0) {
           ++this.flushLevel
         }
       }
 
-      handleTransactionEnd(key) {
-        --this.transactionLevel
-
+      handleTransactionEnd = (unlock) => {
         // The flush level can only be positive if the transaction was started
-        // during a flush
+        // during a flush.
         if (this.flushLevel > 0) {
           --this.flushLevel
         }
 
-        if (--this.transactionLevel === 0) {
+        // Prevents actions on controllers from being called again until
+        // the flush is complete, even if the flush doesn't happen this tick.
+        this.unlockQueue.push(unlock)
+
+        if (--this.transactionLevel === 0 && this.changesExist) {
           ++this.flushLevel
+          this.changesExist = false
           this.setState({ $flush: {} }, () => {
             --this.flushLevel
+            this.unlockQueue.forEach(unlock => unlock())
+            this.unlockQueue.length = 0
           })
         }
       }
     }
 
-    hoistNonReactStatics(ControlledBy, WrappedComponent)
+    hoistNonReactStatics(ControlledByProps, WrappedComponent)
 
-    return ControlledBy
+    return ControlledByProps
   }
 }
 
