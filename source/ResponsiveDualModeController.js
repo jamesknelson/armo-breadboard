@@ -1,4 +1,4 @@
-import PureController from './PureController'
+import { PureController } from 'react-controllers'
 
 
 export default class ResponsiveDualModeController extends PureController {
