@@ -11,7 +11,8 @@ class BreadboardBuild {
   }
 
   run(sources, shouldPack=true) {
-    // - if sources are identical to previous sources, just return the previous result
+    // - if sources are identical to previous sources, and a cached result
+    //   exists, just use it
 
     // - run transforms on source files based on patterns, memoizing a single
     //   previous value per file. invalidate any cached packer result
