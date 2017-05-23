@@ -1,6 +1,6 @@
 {
   "name": "armo-breadboard",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Edit a live React component's source in real time.",
   "author": "James K Nelson <james@jamesknelson.com>",
   "license": "MIT",
